@@ -10,3 +10,7 @@ def clean(context, destination=destination_path):
 @task(default=True,pre=[clean])
 def run(context, source=source_archive, destination=destination_path):
     context.run(f"python extract.py --source {source} --destination {destination}")
+
+@task(pre=[clean])
+def test(context):
+    context.run(f"python test.py")
