@@ -59,49 +59,36 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Extract the contents of Google Takeout data preserving folder structure.")
+        description="Extract the contents of Google Takeout archives preserving folder structure.")
     parser.add_argument("--source",
                         required=True,
-                        help="Google Takeout compressed archive",
-                        type=argparse.FileType('rb'))
+                        help="Source folder that contains chunked Google Takeout archives")
     parser.add_argument("--destination",
                         required=True,
-                        help="The destination directory where data will be extracted to. This path will be created if it doesn't exist.")
+                        help="Destination folder to hold extracted data. It will be created if it doesn't exist.")
     arguments = parser.parse_args()
 
-    # Flag to control whether an extraction is allowed
-    process_extraction = True
-
-    # Do some basic checks on the source archive
+    # Assert that the source folder is accessible
     try:
-        if not tarfile.is_tarfile(arguments.source):
-            raise ValueError('Invalid compression type.')
+        if not( os.path.isdir(arguments.source) and os.access(arguments.source, os.R_OK)):
+            raise ValueError('Unable to access the source folder.')
     except OSError as error:
         print(f"Unable to proceed due to a source path error: {error}")
-        process_extraction = False
-    finally:
-        try:
-            arguments.source.close()
-        except OSError:
-            raise
+        raise
 
-    # Attempt to create the destination directory if it doesn't exist
+    # Attempt to access or otherwise create the destination folder if it doesn't exist
     try:
-        if not os.path.exists(arguments.destination):
-            os.makedirs(arguments.destination)
-        if not os.path.exists(arguments.destination):
-            raise ValueError(f"Destination path [{arguments.destination}] does not exist")
+        os.makedirs(arguments.destination, exist_ok=True)
+        if not (os.path.isdir(arguments.destination) and os.access(arguments.destination, os.W_OK)):
+            raise ValueError(f"Destination path [{arguments.destination}] does not exist, or is invalid")
     except OSError as error:
         print(f"Unable to proceed due to a destination path error: {error}")
-        process_extraction = False
-
-    if not process_extraction:
-        exit(1)
+        raise
 
     # Extract and handle files
     extract_exported_takeout_data(
-        # Points to archive containing compressed Google Takeout data
+        # Points to folder containing chunks of compressed Google Takeout data organised into sub-folders
         arguments.source.name,
-        # Directory where extracted files will be placed
+        # Folder where extracted files will be placed
         arguments.destination
     )
