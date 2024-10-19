@@ -1,59 +1,41 @@
 import os
 import pathlib
-import tarfile
-from typing import Optional
 import zipfile
 
-def extract_inner_zip_file(zipped_file_path, target_path):
+def extract_user_takeout_archive(takeout_archive, target_extraction_path):
     try:
-        with zipfile.ZipFile(zipped_file_path, 'r') as zip_ref:
-            zip_ref.extractall(target_path)
-
-        # clean up
-        os.remove(zipped_file_path)
+        with zipfile.ZipFile(takeout_archive, 'r') as zip_ref:
+            zip_ref.extractall(target_extraction_path)
     except Exception:
-        print(f"Error while extracting {zipped_file_path}")
+        print(f"Error while extracting {takeout_archive}")
         raise
 
-def get_email_address_from_path(path_in_archive: str) -> Optional[str]:
+def get_is_user_path_allowed(path: str) -> bool:
     """
-    File contents in the archive are arranged based on the user's email address.
-    Each email user should have a directory containing their own data. That directory should be
-    named the same as the user's email address.
-    We can extract the concerned email from the string.
+    File contents in the source folder are arranged thus:
+     - path ends with user's email address
+     - path starts with 'Resource:'
     """
-    path_parts = pathlib.Path(path_in_archive).parts
+    return path.endswith('@communityrevolution.co.uk') or path.startswith('Resource:')
 
-    if len(path_parts) > 1 and path_parts[1].endswith('@communityrevolution.co.uk'):
-        return path_parts[1]
-    return None
-
-
-def extract_exported_takeout_data(compressed_source_path: str, target_destination_directory: str):
+def extract_exported_takeout_data(source_folder: str, destination_folder: str):
     """
     Processes the Google Takeout export files and extracts them to the specified directory.
     """
     try:
-        with tarfile.open(compressed_source_path, 'r:xz') as tar_handle:
-            for member in tar_handle.getmembers():
-                member: tarfile.TarInfo
-                email = get_email_address_from_path(member.path)
+        for source_sub_path in pathlib.Path(source_folder).iterdir(): # type: pathlib.Path
+            if source_sub_path.is_dir() and get_is_user_path_allowed(source_sub_path.name):
 
-                if not member.isfile() or not email:
-                    continue
+                for user_file in pathlib.Path(source_sub_path).iterdir(): # type: pathlib.Path
+                    if user_file.name.endswith('.zip'):
+                        extract_user_takeout_archive(
+                            user_file.absolute(),
+                            # Supply the destination folder for target extraction
+                            (pathlib.Path(destination_folder) / source_sub_path.name).absolute()
+                        )
 
-                tar_handle.extract(member, target_destination_directory)
-
-                if member.name.endswith('.zip'):
-                    extract_inner_zip_file(
-                        # The path where the file was just extracted to
-                        os.path.join(target_destination_directory, member.name),
-                        # The destination for inner files which are also archives within the email user folder
-                        os.path.join(target_destination_directory, pathlib.Path(member.name).parent)
-                    )
-
-    except tarfile.TarError as e:
-        print(f"Error reading compressed source file: {compressed_source_path}:{e}")
+    except Exception as e:
+        print(f"Error processing source path: {source_folder}:{e}")
 
 if __name__ == "__main__":
     import argparse
@@ -81,6 +63,10 @@ if __name__ == "__main__":
         os.makedirs(arguments.destination, exist_ok=True)
         if not (os.path.isdir(arguments.destination) and os.access(arguments.destination, os.W_OK)):
             raise ValueError(f"Destination path [{arguments.destination}] does not exist, or is invalid")
+
+        # Ensure source and destination are not the same
+        if pathlib.Path(arguments.source).resolve() == pathlib.Path(arguments.destination).resolve():
+            raise ValueError("Source and destination seem to point to the same path")
     except OSError as error:
         print(f"Unable to proceed due to a destination path error: {error}")
         raise
@@ -88,7 +74,7 @@ if __name__ == "__main__":
     # Extract and handle files
     extract_exported_takeout_data(
         # Points to folder containing chunks of compressed Google Takeout data organised into sub-folders
-        arguments.source.name,
+        arguments.source,
         # Folder where extracted files will be placed
         arguments.destination
     )
