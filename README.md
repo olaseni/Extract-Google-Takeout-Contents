@@ -1,5 +1,5 @@
 # Extract-Google-Takeout-Contents
-A script that extracts the contents of Google Takeout data preserving folder structure.
+A script that extracts the contents of Google Takeout data preserving folder structure..
 
 # Synopsis
 
